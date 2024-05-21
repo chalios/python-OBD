@@ -33,6 +33,7 @@
 import errno
 import glob
 import logging
+import socket
 import string
 import sys
 
@@ -162,6 +163,33 @@ def try_port(portStr):
 
     return False
 
+def try_network(ip, port):
+    try:
+        tun = socket.socket()
+        tun.connect((ip, port))
+        return True
+    except:
+        pass
+    return False
+
+def scan_network():
+    """scan network if it's a wifi adapter"""
+    default_ip = "192.168.0.10"
+    default_port = 35000
+
+    if try_network(default_ip, default_port):
+        return default_ip, default_port
+    
+    for i in range(256):
+        ip = "192.168.0.{i}"
+        
+        if ip == '192.168.0.10':
+            continue
+        
+        if try_network(ip, default_port):
+            return ip, default_port
+        
+    return None
 
 def scan_serial():
     """scan for available ports. return a list of serial names"""
@@ -190,3 +218,15 @@ def scan_serial():
             available.append(port)
 
     return available
+
+def scan_for_devices():
+    # First, scan for serial
+    available_ports = scan_serial()
+
+    # If none, scan for network
+    if not available_ports:
+        net = scan_network()
+        if net:
+            available_ports.append(net)
+    
+    return available_ports

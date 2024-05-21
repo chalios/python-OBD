@@ -32,6 +32,7 @@
 
 import re
 import serial
+import socket
 import time
 import logging
 from .protocols import *
@@ -123,18 +124,26 @@ class ELM327:
         self.timeout = timeout
 
         # ------------- open port -------------
-        try:
-            self.__port = serial.serial_for_url(portname,
-                                                parity=serial.PARITY_NONE,
-                                                stopbits=1,
-                                                bytesize=8,
-                                                timeout=10)  # seconds
-        except serial.SerialException as e:
-            self.__error(e)
-            return
-        except OSError as e:
-            self.__error(e)
-            return
+        if type(portname) == tuple:
+            try:
+                ip, port = portname
+                self.__port = socket.socket()
+                self.__port.connect(ip, port)
+            except:
+                logger.critical("Can't connect to host...")
+        else:
+            try:
+                self.__port = serial.serial_for_url(portname,
+                                                    parity=serial.PARITY_NONE,
+                                                    stopbits=1,
+                                                    bytesize=8,
+                                                    timeout=10)  # seconds
+            except serial.SerialException as e:
+                self.__error(e)
+                return
+            except OSError as e:
+                self.__error(e)
+                return
 
         # If we start with the IC in the low power state we need to wake it up
         if start_low_power:

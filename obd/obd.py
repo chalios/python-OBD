@@ -38,7 +38,7 @@ from .__version__ import __version__
 from .commands import commands
 from .elm327 import ELM327
 from .protocols import ECU_HEADER
-from .utils import scan_serial, OBDStatus
+from .utils import scan_for_devices, OBDStatus
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +73,7 @@ class OBD(object):
 
         if portstr is None:
             logger.info("Using scan_serial to select port")
-            port_names = scan_serial()
+            port_names = scan_for_devices()
             logger.info("Available ports: " + str(port_names))
 
             if not port_names:
