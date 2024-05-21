@@ -167,6 +167,7 @@ def try_network(ip, port):
     try:
         tun = socket.socket()
         tun.connect((ip, port))
+        tun.close() # Do it cleanly.
         return True
     except:
         pass
@@ -178,7 +179,7 @@ def scan_network():
     default_port = 35000
 
     if try_network(default_ip, default_port):
-        return default_ip, default_port
+        return f"{default_ip}:{default_port}"
     
     for i in range(256):
         ip = "192.168.0.{i}"
@@ -187,7 +188,7 @@ def scan_network():
             continue
         
         if try_network(ip, default_port):
-            return ip, default_port
+            return f"{ip}:{default_port}"
         
     return None
 

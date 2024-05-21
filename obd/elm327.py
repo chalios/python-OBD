@@ -124,9 +124,11 @@ class ELM327:
         self.timeout = timeout
 
         # ------------- open port -------------
-        if type(portname) == tuple:
+        match = re.match(r"(.+):([0-9]+)", portname)
+        if match:
             try:
-                ip, port = portname
+                ip   = match.group(1)
+                port = match.group(2)
                 self.__port = socket.socket()
                 self.__port.connect(ip, port)
             except:
@@ -296,7 +298,8 @@ class ELM327:
     def set_baudrate(self, baud):
         if baud is None:
             # when connecting to pseudo terminal, don't bother with auto baud
-            if self.port_name().startswith("/dev/pts"):
+            name = self.port_name()
+            if name.startswith("/dev/pts") or name.startswith('Wifi'):
                 logger.debug("Detected pseudo terminal, skipping baudrate setup")
                 return True
             else:
@@ -366,7 +369,10 @@ class ELM327:
 
     def port_name(self):
         if self.__port is not None:
-            return self.__port.portstr
+            try:
+                return self.__port.portstr
+            except:
+                return "Wifi device"
         else:
             return ""
 
