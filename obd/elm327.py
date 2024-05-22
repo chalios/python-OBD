@@ -121,6 +121,7 @@ class ELM327:
         self.__port = None
         self.__protocol = UnknownProtocol([])
         self.__low_power = False
+        self.__is_serial = True
         self.timeout = timeout
 
         # ------------- open port -------------
@@ -129,10 +130,13 @@ class ELM327:
             try:
                 ip   = match.group(1)
                 port = match.group(2)
-                self.__port = socket.socket()
-                self.__port.connect(ip, port)
-            except:
-                logger.critical("Can't connect to host...")
+                self.__port = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.__port.connect((ip, port))
+                self.__status = OBDStatus.OBD_CONNECTED
+                self.__is_serial = False
+            except socket.error as e:
+                logger.critical(f"Unable to connect to socket {ip}: {e}")
+                self.__status = OBDStatus.NOT_CONNECTED
         else:
             try:
                 self.__port = serial.serial_for_url(portname,
@@ -164,25 +168,26 @@ class ELM327:
             # return data can be junk, so don't bother checking
         except serial.SerialException as e:
             self.__error(e)
-            return
+            raise self.__error
+            #return
 
         # -------------------------- ATE0 (echo OFF) --------------------------
         r = self.__send(b"ATE0")
         if not self.__isok(r, expectEcho=True):
             self.__error("ATE0 did not return 'OK'")
-            return
+            raise self.__error
 
         # ------------------------- ATH1 (headers ON) -------------------------
         r = self.__send(b"ATH1")
         if not self.__isok(r):
             self.__error("ATH1 did not return 'OK', or echoing is still ON")
-            return
+            raise self.__error
 
         # ------------------------ ATL0 (linefeeds OFF) -----------------------
         r = self.__send(b"ATL0")
         if not self.__isok(r):
             self.__error("ATL0 did not return 'OK'")
-            return
+            raise self.__error
 
         # by now, we've successfuly communicated with the ELM, but not the car
         self.__status = OBDStatus.ELM_CONNECTED
@@ -192,13 +197,16 @@ class ELM327:
             r = self.__send(b"AT RV")
             if not r or len(r) != 1 or r[0] == '':
                 self.__error("No answer from 'AT RV'")
+                self.__status = OBDStatus.NOT_CONNECTED
                 return
             try:
                 if float(r[0].lower().replace('v', '')) < 6:
                     logger.error("OBD2 socket disconnected")
+                    self.__status = OBDStatus.NOT_CONNECTED
                     return
             except ValueError as e:
                 self.__error("Incorrect response from 'AT RV'")
+                self.__status = OBDStatus.NOT_CONNECTED
                 return
             # by now, we've successfuly connected to the OBD socket
             self.__status = OBDStatus.OBD_CONNECTED
@@ -519,8 +527,14 @@ class ELM327:
             logger.debug("write: " + repr(cmd))
             try:
                 self.__port.flushInput()  # dump everything in the input buffer
-                self.__port.write(cmd)  # turn the string into bytes and write
+
+                if self.is_serial:
+                    self.__port.write(cmd)
+                else:
+                    self.__port.sendall(cmd)
+                
                 self.__port.flush()  # wait for the output buffer to finish transmitting
+                
             except Exception:
                 self.__status = OBDStatus.NOT_CONNECTED
                 self.__port.close()
@@ -547,7 +561,10 @@ class ELM327:
         while True:
             # retrieve as much data as possible
             try:
-                data = self.__port.read(self.__port.in_waiting or 1)
+                if self.__is_serial:
+                    data = self.__port.read(self.__port.in_waiting or 1)
+                else:
+                    data = self.__port.recv(4096)
             except Exception:
                 self.__status = OBDStatus.NOT_CONNECTED
                 self.__port.close()
